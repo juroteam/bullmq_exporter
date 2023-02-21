@@ -66,7 +66,8 @@ export class MetricCollector {
 				}),
 				prefix: this.bullOpts.prefix || 'bull',
 				queueEvents: new QueueEvents(name, {
-					connection: this.defaultRedisClient,
+					...this.bullOpts,
+					connection: new IoRedis(this.redisUri), // QueueEvents instances must not reuse Redis connections, see https://docs.bullmq.io/guide/connections
 				}),
 			});
     }
