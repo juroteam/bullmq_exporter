@@ -1,4 +1,3 @@
-import { Queue, QueueEvents, QueueOptions } from 'bullmq';
 import * as Logger from 'bunyan';
 import IoRedis, { Redis } from 'ioredis';
 import { register as globalRegister, Registry } from 'prom-client';
@@ -6,9 +5,11 @@ import { register as globalRegister, Registry } from 'prom-client';
 import { logger as globalLogger } from './logger';
 import { getJobCompleteStats, getStats, makeGuages, QueueGauges } from './queueGauges';
 
-export interface MetricCollectorOptions extends Omit<QueueOptions, 'redis'> {
+import { Queue, QueueEvents, QueueOptions } from 'bullmq';
+
+export interface MetricCollectorOptions extends Omit<QueueOptions, 'connection'> {
   metricPrefix: string;
-  redis: string;
+  connection: Redis;
   autoDiscover: boolean;
   logger: Logger;
 }
@@ -23,10 +24,8 @@ export interface QueueData<T = unknown> {
 export class MetricCollector {
 
   private readonly logger: Logger;
-
   private readonly defaultRedisClient: Redis;
-  private readonly redisUri: string;
-  private readonly bullOpts: Omit<QueueOptions, 'redis'>;
+  private readonly bullOpts: Omit<QueueOptions, 'connection'>;
   private readonly queuesByName: Map<string, QueueData<unknown>> = new Map();
 
   private get queues(): QueueData<unknown>[] {
@@ -42,9 +41,8 @@ export class MetricCollector {
     opts: MetricCollectorOptions,
     registers: Registry[] = [globalRegister],
   ) {
-    const { logger, autoDiscover, redis, metricPrefix, ...bullOpts } = opts;
-    this.redisUri = redis;
-    this.defaultRedisClient = new IoRedis(this.redisUri);
+    const { logger, autoDiscover, connection, metricPrefix, ...bullOpts } = opts;
+    this.defaultRedisClient = connection;
     this.defaultRedisClient.setMaxListeners(32);
     this.bullOpts = bullOpts;
     this.logger = logger || globalLogger;
@@ -67,7 +65,7 @@ export class MetricCollector {
 				prefix: this.bullOpts.prefix || 'bull',
 				queueEvents: new QueueEvents(name, {
 					...this.bullOpts,
-					connection: new IoRedis(this.redisUri), // QueueEvents instances must not reuse Redis connections, see https://docs.bullmq.io/guide/connections
+					connection: new IoRedis(this.defaultRedisClient.options), // QueueEvents instances must not reuse Redis connections, see https://docs.bullmq.io/guide/connections
 				}),
 			});
     }

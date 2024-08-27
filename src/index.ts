@@ -4,15 +4,18 @@ import { logger } from './logger';
 import { MetricCollector } from './metricCollector';
 import { getOptionsFromArgs, Options } from './options';
 import { startServer } from './server';
+import { Redis } from 'ioredis';
 
 // because we explicitly want just the metrics here
 // tslint:disable:no-console
 
 export async function printOnce(opts: Options): Promise<void> {
+  const redisClient = new Redis(opts.url);
+
   const collector = new MetricCollector(opts._, {
     logger,
     metricPrefix: opts.metricPrefix,
-    redis: opts.url,
+    connection: redisClient,
     prefix: opts.prefix,
     autoDiscover: opts.autoDiscover,
   });

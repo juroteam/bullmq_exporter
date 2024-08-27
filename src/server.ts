@@ -6,6 +6,7 @@ import { v4 as uuid } from 'uuid';
 import { logger } from './logger';
 import { MetricCollector } from './metricCollector';
 import { Options } from './options';
+import { Redis } from 'ioredis';
 
 function calcDuration(start: [number, number]): number {
   const diff = process.hrtime(start);
@@ -54,11 +55,11 @@ export async function makeServer(opts: Options): Promise<express.Application> {
     next();
 
   });
-
+  const redisClient = new Redis(opts.url);
   const collector = new MetricCollector(opts._, {
     logger,
     metricPrefix: opts.metricPrefix,
-    redis: opts.url,
+    connection: redisClient,
     prefix: opts.prefix,
     autoDiscover: opts.autoDiscover,
   });
