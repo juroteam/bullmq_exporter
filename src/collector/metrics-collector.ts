@@ -4,7 +4,7 @@ import IoRedis, { Redis } from 'ioredis';
 import { register as globalRegister, Registry } from 'prom-client';
 
 import { logger, logger as globalLogger } from '../utils/logger';
-import { getJobCompleteStats, getStats, makeGuages, Index } from '../queue-gauges';
+import { getJobCompleteStats, getStats, makeGuages, QueueGauges } from '../queue-gauges';
 import { getOptions } from '../utils/options';
 
 export interface QueueData<T = unknown> {
@@ -28,7 +28,7 @@ export class MetricsCollector {
 
 	private readonly myListeners: Set<(id: string) => Promise<void>> = new Set();
 
-	private readonly guages: Index;
+	private readonly guages: QueueGauges;
 
 	constructor(queueNames: string[], registers: Registry[] = [globalRegister]) {
 		const opts = getOptions();
