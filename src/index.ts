@@ -32,10 +32,6 @@ export async function printOnce(): Promise<void> {
 		logger.info('Collector closed successfully');
 	} catch (error) {
 		logger.warn('Collector close timed out or failed:', error);
-		// Force disconnect the Redis client
-		logger.info('Force disconnecting Redis client...');
-		collector['defaultRedisClient'].disconnect();
-		logger.info('Redis client force disconnected');
 	}
 
 	logger.info('Outputting metrics...');
@@ -47,18 +43,18 @@ export async function runServer(): Promise<void> {
 	await done;
 }
 
-export async function main(...args: string[]): Promise<void> {
+export async function main(...args: string[]): Promise<'once' | 'server' > {
 	const opts = getOptions(...args);
 	logger.info('Main function started with options:', { once: opts.once, autoDiscover: opts.autoDiscover });
 
 	if (opts.once) {
 		logger.info('Running in printOnce mode...');
 		await printOnce();
-		logger.info('printOnce completed, forcing exit...');
-		process.exit(0); // Force exit immediately after printOnce
+		return 'once';
 	} else {
 		logger.info('Running in server mode...');
 		await runServer();
+		return 'server';
 	}
 	logger.info('Main function completed');
 }
@@ -73,12 +69,15 @@ if (require.main === module) {
 			logger.error('Main function failed:', error);
 			process.exitCode = exitCode = 1;
 		})
-		.then(() => {
-			logger.info('Main function completed successfully, setting up exit timeout...');
-			setTimeout(() => {
-				logger.error('No clean exit after 5 seconds, force exit');
-				process.exit(exitCode);
-			}, 5000).unref();
+		.then((mode) => {
+			if (mode === 'once') {
+				process.exit(0);
+			} else {
+			  setTimeout(() => {
+			  	logger.error('No clean exit after 5 seconds, force exit');
+			  	process.exit(exitCode);
+			  }, 5000).unref();
+		  }
 		})
 		.catch((err) => {
 			console.error('Double error');

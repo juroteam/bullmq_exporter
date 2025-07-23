@@ -20,6 +20,7 @@ export class MetricsCollector {
 	private readonly defaultRedisClient: Redis;
 	private readonly bullOpts: Pick<QueueOptions, 'prefix'>;
 	private readonly queuesByName: Map<string, QueueData<unknown>> = new Map();
+	private readonly redisClients: Set<Redis> = new Set(); // Track all Redis clients
 
 	private get queues(): QueueData<unknown>[] {
 		return [...this.queuesByName.values()];
@@ -201,11 +202,6 @@ export class MetricsCollector {
 		}
 		this.logger.info('Event listeners removed.');
 
-		// Force disconnect all Redis connections immediately
-		this.logger.info('Disconnecting main Redis client...');
-		this.defaultRedisClient.disconnect();
-		this.logger.info('Main Redis client disconnected.');
-
 		this.logger.info('Closing queues and queue events...');
 		const closePromises = this.queues.map(async (q) => {
 			try {
@@ -228,9 +224,13 @@ export class MetricsCollector {
 			}
 		});
 
-		Promise.all(closePromises).catch(error => {
-			this.logger.warn('Some close operations failed:', error);
-		});
+		await Promise.all(closePromises);
+		this.logger.info('BullMQ objects closed.');
+
+		this.logger.info('Disconnecting Redis clients...');
+		this.defaultRedisClient.disconnect();
+		this.logger.info('Redis clients disconnected.');
+
 		this.logger.info('Close process completed.');
 	}
 }

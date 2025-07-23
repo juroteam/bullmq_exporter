@@ -9,6 +9,9 @@ module.exports = {
     '[.]util[.][jt]s$',
     '[.]d[.][jt]s$',
   ],
+  modulePathIgnorePatterns: [
+    '<rootDir>/dist/',
+  ],
   setupFilesAfterEnv: ['<rootDir>/__tests__/setup.util.ts'],
   transform: {
     '\\.[jt]sx?$': ["ts-jest", { tsconfig: '__tests__/tsconfig.json' }],

@@ -7,9 +7,6 @@ import { getCurrentTestHash } from './setup.util';
 let testData: TestData;
 const JOB_NAME = 'test-job';
 
-// Increase timeout for all tests since Sentinel connections take longer
-jest.setTimeout(30000); // 30 seconds
-
 describe('Queue Gauges',() => {
 	beforeEach(async () => {
 		const hash = getCurrentTestHash();
@@ -18,37 +15,29 @@ describe('Queue Gauges',() => {
 
 	afterEach(async () => {
 		try {
-			// Close worker first
 			if (testData.worker) {
 				await testData.worker.close();
 			}
+		} catch (err) {
+			console.warn('Failed to close worker:', err);
+		}
 
-			// Close queue and events with timeouts
-			const closePromises: Promise<void>[] = [];
+		try {
+			await testData.queue.obliterate({ force: true });
+		} catch (err) {
+			console.warn('Failed to obliterate queue:', err);
+		}
 
-			if (testData.queue) {
-				closePromises.push(
-					testData.queue.close().catch(error => {
-						console.warn('Queue close failed:', error.message);
-					})
-				);
-			}
+		try {
+			await testData.events.close();
+		} catch (err) {
+			console.warn('Failed to close queue events:', err);
+		}
 
-			if (testData.events) {
-				closePromises.push(
-					testData.events.close().catch(error => {
-						console.warn('QueueEvents close failed:', error.message);
-					})
-				);
-			}
-
-			// Wait for close operations with timeout
-			await Promise.race([
-				Promise.all(closePromises),
-				new Promise<void>(resolve => setTimeout(resolve, 5000)) // 5 second timeout
-			]);
-		} catch (error) {
-			console.warn('Test cleanup failed:', (error as Error).message);
+		try {
+			await testData.queue.close();
+		} catch (err) {
+			console.warn('Failed to close queue:', err);
 		}
 	});
 

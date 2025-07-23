@@ -6,12 +6,3 @@ export function getCurrentTestHash(): string {
     .digest('hex')
     .slice(0, 16);
 }
-
-// Global error handler for tests
-process.on('unhandledRejection', (reason, promise) => {
-  console.warn('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.warn('Uncaught Exception:', error);
-});

@@ -15,7 +15,7 @@ export interface TestData {
 }
 
 const getSentinelConfig = () => {
-	const sentinelHosts = process.env.TEST_SENTINEL_HOSTS || 'localhost:26379';
+	const sentinelHosts = process.env.TEST_SENTINEL_HOSTS || 'redis-sentinel:26379';
 	const sentinelName = process.env.TEST_SENTINEL_NAME || 'redis-master';
 	const sentinelPassword = process.env.TEST_SENTINEL_PASSWORD;
 
@@ -54,7 +54,7 @@ const redisOptions = createRedisOptions();
 
 async function waitUntilReady(waitable: { waitUntilReady: () => Promise<unknown> }) {
 	if (process.env.WAIT_UNTIL_READY === 'TRUE') {
-		await waitable.waitUntilReady();
+	  await waitable.waitUntilReady();
 	}
 }
 
@@ -78,10 +78,17 @@ export async function makeQueue(name: string = 'TestQueue', prefix: string = 'te
 	const queue = new Queue(name, { connection: defaultRedisClient });
 	const events = new QueueEvents(name, { connection: eventsRedis });
 
-	await Promise.all([
-		waitUntilReady(queue),
-		waitUntilReady(events),
-	]);
+	console.log(`Waiting for queue ${name} and events to be ready...`);
+	try {
+		await Promise.all([
+			waitUntilReady(queue),
+			waitUntilReady(events),
+		]);
+		console.log(`Queue ${name} and events are ready`);
+	} catch (error) {
+		console.error(`Failed to initialize queue ${name}:`, error);
+		throw error;
+	}
 
 	return {
 		name,
@@ -96,6 +103,7 @@ export async function makeQueue(name: string = 'TestQueue', prefix: string = 'te
 export async function makeWorker(name: string = 'TestQueue', func: Processor): Promise<Worker> {
 	const workerRedis = new IoRedis(redisOptions);
 	workerRedis.setMaxListeners(32); // Match production exactly
+
 	const worker = new Worker(name, func, { connection: workerRedis });
 	await waitUntilReady(worker);
 	return worker;
