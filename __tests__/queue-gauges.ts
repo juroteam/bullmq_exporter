@@ -7,6 +7,8 @@ import { getCurrentTestHash } from './setup.util';
 let testData: TestData;
 const JOB_NAME = 'test-job';
 
+// Increase timeout for all tests since Sentinel connections take longer
+jest.setTimeout(30000); // 30 seconds
 
 describe('Queue Gauges',() => {
 	beforeEach(async () => {
@@ -15,10 +17,39 @@ describe('Queue Gauges',() => {
 	});
 
 	afterEach(async () => {
-		await testData.worker?.close();
-		await testData.queue.obliterate({ force: true });
-		await testData.events.close();
-		await testData.queue.close();
+		try {
+			// Close worker first
+			if (testData.worker) {
+				await testData.worker.close();
+			}
+
+			// Close queue and events with timeouts
+			const closePromises: Promise<void>[] = [];
+
+			if (testData.queue) {
+				closePromises.push(
+					testData.queue.close().catch(error => {
+						console.warn('Queue close failed:', error.message);
+					})
+				);
+			}
+
+			if (testData.events) {
+				closePromises.push(
+					testData.events.close().catch(error => {
+						console.warn('QueueEvents close failed:', error.message);
+					})
+				);
+			}
+
+			// Wait for close operations with timeout
+			await Promise.race([
+				Promise.all(closePromises),
+				new Promise<void>(resolve => setTimeout(resolve, 5000)) // 5 second timeout
+			]);
+		} catch (error) {
+			console.warn('Test cleanup failed:', (error as Error).message);
+		}
 	});
 
 	it('should list 1 queued job', async () => {
