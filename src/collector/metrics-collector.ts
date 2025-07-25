@@ -20,7 +20,7 @@ export class MetricsCollector {
 	private readonly defaultRedisClient: Redis;
 	private readonly bullOpts: Pick<QueueOptions, 'prefix'>;
 	private readonly queuesByName: Map<string, QueueData<unknown>> = new Map();
-	private readonly redisClients: Set<Redis> = new Set(); // Track all Redis clients
+	private readonly queueEventsRedisClients: Redis[] = [];
 
 	private get queues(): QueueData<unknown>[] {
 		return [...this.queuesByName.values()];
@@ -96,6 +96,7 @@ export class MetricsCollector {
 			// Create separate Redis connection for QueueEvents
 			const queueEventsRedisOptions = this.createRedisOptions();
 			const queueEventsRedis = new IoRedis(queueEventsRedisOptions);
+			this.queueEventsRedisClients.push(queueEventsRedis); // Add to tracking array
 
 			queueEventsRedis.on('error', (error) => {
 				this.logger.error(`QueueEvents Redis error for queue ${name}:`, error);
@@ -228,7 +229,12 @@ export class MetricsCollector {
 		this.logger.info('BullMQ objects closed.');
 
 		this.logger.info('Disconnecting Redis clients...');
-		this.defaultRedisClient.disconnect();
+		await this.defaultRedisClient.quit().catch(() => this.defaultRedisClient.disconnect());
+
+		for (const client of this.queueEventsRedisClients) {
+			await client.quit().catch(() => client.disconnect());
+		}
+
 		this.logger.info('Redis clients disconnected.');
 
 		this.logger.info('Close process completed.');
