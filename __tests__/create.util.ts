@@ -3,7 +3,6 @@ import { Registry } from 'prom-client';
 import IoRedis from 'ioredis';
 
 import { makeGuages, QueueGauges } from '../src/queue-gauges';
-import { MetricsCollector } from '../src/collector/metrics-collector';
 
 export interface TestData {
 	name: string;
@@ -13,7 +12,6 @@ export interface TestData {
 	registry: Registry;
 	events: QueueEvents;
 	worker?: Worker;
-	collector?: MetricsCollector;
 }
 
 const getSentinelConfig = () => {
@@ -104,7 +102,7 @@ export async function makeQueue(name: string = 'TestQueue', prefix: string = 'te
 
 export async function makeWorker(name: string = 'TestQueue', func: Processor): Promise<Worker> {
 	const workerRedis = new IoRedis(redisOptions);
-	workerRedis.setMaxListeners(32); // Match production exactly
+	workerRedis.setMaxListeners(32);
 
 	const worker = new Worker(name, func, { connection: workerRedis });
 	await waitUntilReady(worker);
@@ -112,8 +110,7 @@ export async function makeWorker(name: string = 'TestQueue', func: Processor): P
 }
 
 /**
- * Cleanup function to properly close all Redis connections and BullMQ objects
- * Uses the production MetricsCollector for reliable cleanup
+ * Cleanup function that properly closes all Redis connections and BullMQ objects
  */
 export async function cleanupTestData(testData: TestData): Promise<void> {
 	console.log(`Cleaning up test data for queue: ${testData.name}`);
@@ -126,6 +123,10 @@ export async function cleanupTestData(testData: TestData): Promise<void> {
 			testData.events.close(),
 		]);
 		console.log('BullMQ objects closed successfully');
+
+		// Give Redis connections time to close
+		await new Promise(resolve => setTimeout(resolve, 200));
+		console.log('Cleanup completed with delay');
 
 	} catch (error) {
 		console.error(`Error during cleanup for queue ${testData.name}:`, error);
@@ -143,6 +144,10 @@ export async function cleanupWorker(worker: Worker): Promise<void> {
 		// Close the worker - this will handle Redis connections properly
 		await worker.close();
 		console.log(`Worker ${worker.name} closed successfully`);
+
+		// Give Redis connections time to close
+		await new Promise(resolve => setTimeout(resolve, 100));
+		console.log('Worker cleanup completed with delay');
 
 	} catch (error) {
 		console.error(`Error during worker cleanup for ${worker.name}:`, error);
