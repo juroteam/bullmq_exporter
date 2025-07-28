@@ -3,6 +3,7 @@ import { Registry } from 'prom-client';
 import IoRedis from 'ioredis';
 
 import { makeGuages, QueueGauges } from '../src/queue-gauges';
+import { MetricsCollector } from '../src/collector/metrics-collector';
 
 export interface TestData {
 	name: string;
@@ -12,6 +13,7 @@ export interface TestData {
 	registry: Registry;
 	events: QueueEvents;
 	worker?: Worker;
+	collector?: MetricsCollector;
 }
 
 const getSentinelConfig = () => {
@@ -107,4 +109,43 @@ export async function makeWorker(name: string = 'TestQueue', func: Processor): P
 	const worker = new Worker(name, func, { connection: workerRedis });
 	await waitUntilReady(worker);
 	return worker;
+}
+
+/**
+ * Cleanup function to properly close all Redis connections and BullMQ objects
+ * Uses the production MetricsCollector for reliable cleanup
+ */
+export async function cleanupTestData(testData: TestData): Promise<void> {
+	console.log(`Cleaning up test data for queue: ${testData.name}`);
+
+	try {
+		// Close BullMQ objects first - this will handle Redis connections properly
+		console.log('Closing BullMQ objects...');
+		await Promise.all([
+			testData.queue.close(),
+			testData.events.close(),
+		]);
+		console.log('BullMQ objects closed successfully');
+
+	} catch (error) {
+		console.error(`Error during cleanup for queue ${testData.name}:`, error);
+		throw error;
+	}
+}
+
+/**
+ * Cleanup function for workers
+ */
+export async function cleanupWorker(worker: Worker): Promise<void> {
+	console.log(`Cleaning up worker: ${worker.name}`);
+
+	try {
+		// Close the worker - this will handle Redis connections properly
+		await worker.close();
+		console.log(`Worker ${worker.name} closed successfully`);
+
+	} catch (error) {
+		console.error(`Error during worker cleanup for ${worker.name}:`, error);
+		throw error;
+	}
 }

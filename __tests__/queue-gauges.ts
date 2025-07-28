@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import { getJobCompleteStats, getStats } from '../src/queue-gauges';
 
-import { makeQueue, makeWorker, TestData } from './create.util';
+import { makeQueue, makeWorker, TestData, cleanupTestData, cleanupWorker } from './create.util';
 import { getCurrentTestHash } from './setup.util';
 
 let testData: TestData;
@@ -16,10 +16,10 @@ describe('Queue Gauges',() => {
 	afterEach(async () => {
 		try {
 			if (testData.worker) {
-				await testData.worker.close();
+				await cleanupWorker(testData.worker);
 			}
 		} catch (err) {
-			console.warn('Failed to close worker:', err);
+			console.warn('Failed to cleanup worker:', err);
 		}
 
 		try {
@@ -29,15 +29,9 @@ describe('Queue Gauges',() => {
 		}
 
 		try {
-			await testData.events.close();
+			await cleanupTestData(testData);
 		} catch (err) {
-			console.warn('Failed to close queue events:', err);
-		}
-
-		try {
-			await testData.queue.close();
-		} catch (err) {
-			console.warn('Failed to close queue:', err);
+			console.warn('Failed to cleanup test data:', err);
 		}
 	});
 

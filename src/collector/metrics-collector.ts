@@ -96,7 +96,7 @@ export class MetricsCollector {
 			// Create separate Redis connection for QueueEvents
 			const queueEventsRedisOptions = this.createRedisOptions();
 			const queueEventsRedis = new IoRedis(queueEventsRedisOptions);
-			this.queueEventsRedisClients.push(queueEventsRedis); // Add to tracking array
+			this.queueEventsRedisClients.push(queueEventsRedis);
 
 			queueEventsRedis.on('error', (error) => {
 				this.logger.error(`QueueEvents Redis error for queue ${name}:`, error);
@@ -195,6 +195,16 @@ export class MetricsCollector {
 	public async close(): Promise<void> {
 		this.logger.info('Starting close process...');
 
+		try {
+			await this.performClose();
+			this.logger.info('Close process completed successfully.');
+		} catch (error) {
+			this.logger.error('Close process failed:', error);
+			throw error;
+		}
+	}
+
+	private async performClose(): Promise<void> {
 		this.logger.info('Removing event listeners...');
 		for (const q of this.queues) {
 			for (const l of this.myListeners) {
@@ -206,22 +216,16 @@ export class MetricsCollector {
 		this.logger.info('Closing queues and queue events...');
 		const closePromises = this.queues.map(async (q) => {
 			try {
-				const queueClosePromise = q.queue.close();
-				const queueTimeoutPromise = new Promise((_, reject) =>
-					setTimeout(() => reject(new Error('Queue close timeout')), 500)
-				);
-				await Promise.race([queueClosePromise, queueTimeoutPromise]);
+				await q.queue.close();
+				this.logger.debug(`Queue ${q.name} closed successfully`);
 			} catch (error) {
-				this.logger.warn('Queue close timed out, continuing:', error);
+				this.logger.warn(`Queue ${q.name} close failed:`, error);
 			}
 			try {
-				const eventsClosePromise = q.queueEvents.close();
-				const eventsTimeoutPromise = new Promise((_, reject) =>
-					setTimeout(() => reject(new Error('Queue events close timeout')), 500)
-				);
-				await Promise.race([eventsClosePromise, eventsTimeoutPromise]);
+				await q.queueEvents.close();
+				this.logger.debug(`Queue events ${q.name} closed successfully`);
 			} catch (error) {
-				this.logger.warn('Queue events close timed out, continuing:', error);
+				this.logger.warn(`Queue events ${q.name} close failed:`, error);
 			}
 		});
 
@@ -229,14 +233,42 @@ export class MetricsCollector {
 		this.logger.info('BullMQ objects closed.');
 
 		this.logger.info('Disconnecting Redis clients...');
-		await this.defaultRedisClient.quit().catch(() => this.defaultRedisClient.disconnect());
+
+		await this.closeRedisClient(this.defaultRedisClient, 'default');
 
 		for (const client of this.queueEventsRedisClients) {
-			await client.quit().catch(() => client.disconnect());
+			await this.closeRedisClient(client, 'queue events');
 		}
 
 		this.logger.info('Redis clients disconnected.');
+	}
 
-		this.logger.info('Close process completed.');
+	private async closeRedisClient(client: Redis, clientType: string): Promise<void> {
+		try {
+			this.logger.debug(`Closing ${clientType} Redis client...`);
+
+			const promiseEnd = new Promise<void>((resolve) => {
+				client.once('end', () => {
+					this.logger.debug(`${clientType} Redis client ended naturally`);
+					resolve();
+				});
+			});
+
+			await client.quit();
+			this.logger.debug(`${clientType} Redis client quit command sent`);
+
+			await promiseEnd;
+
+			this.logger.debug(`${clientType} Redis client closed successfully`);
+		} catch (error) {
+			this.logger.error(`Error closing ${clientType} Redis client:`, error);
+			// Fallback to disconnect if quit fails
+			try {
+				client.disconnect();
+				this.logger.debug(`${clientType} Redis client disconnected as fallback`);
+			} catch (disconnectError) {
+				this.logger.error(`Failed to disconnect ${clientType} Redis client:`, disconnectError);
+			}
+		}
 	}
 }

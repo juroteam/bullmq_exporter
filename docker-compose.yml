@@ -72,4 +72,4 @@ services:
         echo "Waiting for Sentinel to be fully ready..."
         sleep 10
         echo "Running tests..."
-        npx jest --ci
+        npx jest --ci --forceExit
