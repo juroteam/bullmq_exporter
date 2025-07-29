@@ -33,7 +33,7 @@ The dashboard pictured above is [available to download from grafana](https://gra
 It will work aslong as EXPORTER_STAT_PREFIX is not changed.
 
 ## Queue Discovery
-Queues are discovered at start up by running `KEYS bull:*:id` 
+Queues are discovered at start up by running `KEYS bull:*:id`
 this can also be triggered manually from the `/discover_queues` endpoint
 `curl -XPOST localhost:9538/discover_queues`
 
@@ -51,16 +51,22 @@ this can also be triggered manually from the `/discover_queues` endpoint
 
 ## Kubernetes Usage
 
-### Environment variables for default docker image
+### Required Environment Variables
 
-| variable              | default                  | description                                     |
-|-----------------------|--------------------------|-------------------------------------------------|
-| EXPORTER_REDIS_URL    | redis://localhost:6379/0 | Redis uri to connect                            |
-| EXPORTER_PREFIX       | bull                     | prefix for queues                               |
-| EXPORTER_STAT_PREFIX  | bull_queue_              | prefix for exported metrics                     |
-| EXPORTER_QUEUES       | -                        | a space separated list of queues to check       |
-| EXPORTER_AUTODISCOVER | -                        | set to '0' or 'false' to disable queue discovery|
+| variable                    | description                                     |
+|-----------------------------|-------------------------------------------------|
+| EXPORTER_SENTINEL_HOSTS     | Comma-separated list of Sentinel hosts         |
+| EXPORTER_SENTINEL_NAME      | Master name configured in Sentinel              |
 
+### Optional Environment Variables
+
+| variable                    | default                  | description                                     |
+|-----------------------------|--------------------------|-------------------------------------------------|
+| EXPORTER_SENTINEL_PASSWORD  | -                        | Password for Sentinel authentication            |
+| EXPORTER_PREFIX             | bull                     | prefix for queues                               |
+| EXPORTER_STAT_PREFIX        | bull_queue_              | prefix for exported metrics                     |
+| EXPORTER_QUEUES             | -                        | a space separated list of queues to check       |
+| EXPORTER_AUTODISCOVER       | -                        | set to '0' or 'false' to disable queue discovery|
 
 ### Example deployment
 
@@ -113,9 +119,16 @@ spec:
             - name: EXPORTER_QUEUES
               value: "mail job_one video audio"
 
-              # find the redis service in the cluster
-            - name: EXPORTER_REDIS_URL
-              value: redis://redis:6379/0
+              # Required Sentinel configuration
+            - name: EXPORTER_SENTINEL_HOSTS
+              value: "sentinel-1:26379,sentinel-2:26379,sentinel-3:26379"
+            - name: EXPORTER_SENTINEL_NAME
+              value: "mymaster"
+            - name: EXPORTER_SENTINEL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-sentinel-secret
+                  key: password
 ---
 apiVersion: v1
 kind: Service
@@ -136,5 +149,4 @@ spec:
   selector:
     app: bull
     role: exporter
-
 ```

@@ -1,12 +1,11 @@
 import { Job } from 'bullmq';
 import { getJobCompleteStats, getStats } from '../src/queue-gauges';
 
-import { makeQueue, makeWorker, TestData } from './create.util';
+import { makeQueue, makeWorker, TestData, cleanupTestData, cleanupWorker } from './create.util';
 import { getCurrentTestHash } from './setup.util';
 
 let testData: TestData;
 const JOB_NAME = 'test-job';
-
 
 describe('Queue Gauges',() => {
 	beforeEach(async () => {
@@ -15,10 +14,25 @@ describe('Queue Gauges',() => {
 	});
 
 	afterEach(async () => {
-		await testData.worker?.close();
-		await testData.queue.obliterate({ force: true });
-		await testData.events.close();
-		await testData.queue.close();
+		try {
+			if (testData.worker) {
+				await cleanupWorker(testData.worker);
+			}
+		} catch (err) {
+			console.warn('Failed to cleanup worker:', err);
+		}
+
+		try {
+			await testData.queue.obliterate({ force: true });
+		} catch (err) {
+			console.warn('Failed to obliterate queue:', err);
+		}
+
+		try {
+			await cleanupTestData(testData);
+		} catch (err) {
+			console.warn('Failed to cleanup test data:', err);
+		}
 	});
 
 	it('should list 1 queued job', async () => {

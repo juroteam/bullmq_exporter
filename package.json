@@ -7,7 +7,9 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc -p .",
-    "test": "jest --ci"
+    "test": "TEST_SENTINEL_HOSTS=localhost:26379 TEST_SENTINEL_NAME=redis-master jest --ci --detectOpenHandles --forceExit --testTimeout=5000",
+    "test:docker": "docker compose up --abort-on-container-exit --exit-code-from test redis-master redis-replica-1 redis-replica-2 redis-sentinel test",
+    "test:docker:cleanup": "docker compose down"
   },
   "devDependencies": {
     "@babel/core": "7.10.4",

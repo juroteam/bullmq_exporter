@@ -2,34 +2,74 @@ volumes:
   node_modules:
 
 services:
-  regular_redis:
-    image: redis
-    ports:
-      - "36379:6379"
-
-  bitnami_redis:
-    platform: 'linux/amd64'
-    user: root
-    image: 'bitnami/redis:6.2'
+  redis-master:
+    image: bitnami/redis:7.4
     environment:
+      - REDIS_REPLICATION_MODE=master
       - ALLOW_EMPTY_PASSWORD=yes
     ports:
-      - "36380:6379"
+      - "6379:6379"
+  redis-replica-1:
+    image: bitnami/redis:7.4
+    environment:
+      - REDIS_REPLICATION_MODE=slave
+      - REDIS_REPLICA_IP=redis-replica-1
+      - REDIS_MASTER_HOST=redis-master
+      - ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - "6380:6379"
+    depends_on:
+      - redis-master
+  redis-replica-2:
+    image: bitnami/redis:7.4
+    environment:
+      - REDIS_REPLICATION_MODE=slave
+      - REDIS_REPLICA_IP=redis-replica-2
+      - REDIS_MASTER_HOST=redis-master
+      - ALLOW_EMPTY_PASSWORD=yes
+    ports:
+      - "6381:6379"
+    depends_on:
+      - redis-master
 
-  app:
+  # Redis Sentinel nodes
+  redis-sentinel:
+    image: bitnami/redis-sentinel:7.4
+    environment:
+      - REDIS_SENTINEL_QUORUM=1
+      - REDIS_SENTINEL_ANNOUNCE_IP=sentinel
+      - REDIS_MASTER_HOST=redis-master
+      - REDIS_MASTER_SET=redis-master
+    ports:
+      - "26379:26379"
+    depends_on:
+      - redis-master
+      - redis-replica-1
+      - redis-replica-2
+
+
+  # Test Service - runs tests inside Docker network
+  test:
     image: "node:alpine"
     depends_on:
-      - regular_redis
-      - bitnami_redis
+      - redis-sentinel
     volumes:
       - ".:/app"
       - "node_modules:/app/node_modules"
     working_dir: /app
     environment:
-      - "REDIS_HOST=regular_redis"
-      - "REDIS_PORT=6379"
+      - "TEST_SENTINEL_HOSTS=redis-sentinel:26379"
+      - "TEST_SENTINEL_NAME=redis-master"
       - "WAIT_UNTIL_READY=TRUE"
     command:
-      - tail
-      - -f
-      - /dev/null
+      - sh
+      - -c
+      - |
+        echo "Installing dependencies..."
+        yarn install
+        echo "Building the project..."
+        yarn build
+        echo "Waiting for Sentinel to be fully ready..."
+        sleep 10
+        echo "Running tests..."
+        npx jest --ci --forceExit

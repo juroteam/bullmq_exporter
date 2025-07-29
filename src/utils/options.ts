@@ -3,13 +3,16 @@ import yargs from 'yargs';
 import { version } from '../../package.json';
 
 export interface Options {
-	url: string;
 	prefix: string;
 	metricPrefix: string;
 	once: boolean;
 	port: number;
 	bindAddress: string;
 	autoDiscover: boolean;
+	// Sentinel configuration - required
+	sentinelHosts: string;
+	sentinelName: string;
+	sentinelPassword?: string;
 	_: string[];
 }
 
@@ -21,12 +24,6 @@ export function getOptions(...args: string[]): Options {
 			.version(version)
 			.alias('V', 'version')
 			.options({
-				url: {
-					alias: 'u',
-					describe: 'A redis connection url',
-					default: 'redis://127.0.0.1:6379',
-					demandOption: true,
-				},
 				prefix: {
 					alias: 'p',
 					default: 'bull',
@@ -56,6 +53,21 @@ export function getOptions(...args: string[]): Options {
 					alias: 'b',
 					description: 'Address to listen on',
 					default: '0.0.0.0',
+				},
+				// Sentinel configuration options
+				sentinelHosts: {
+					describe: 'Comma-separated list of Sentinel hosts (e.g., "host1:26379,host2:26379")',
+					type: 'string',
+					demandOption: true,
+				},
+				sentinelName: {
+					describe: 'Master name configured in Sentinel',
+					type: 'string',
+					demandOption: true,
+				},
+				sentinelPassword: {
+					describe: 'Password for Sentinel authentication',
+					type: 'string',
 				},
 			})
 			.option('string-option', {
